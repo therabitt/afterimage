@@ -1,30 +1,157 @@
-import {useCallback,useEffect,useState} from 'react'
-import {useAfterimageEngine} from '../hooks/useAfterimageEngine'
-import {useReducedMotion} from '../hooks/useReducedMotion'
-import {loadSettings,saveSettings} from '../settings/storage'
-import {DEFAULT_SETTINGS} from '../settings/defaults'
-import {PALETTES} from '../engine/palettes'
-import {downloadBlob,createExportFilename} from '../utils/download'
-import type {AfterimageSettings,PaletteId} from '../types'
-export default function App(){
- const [settings,setSettings]=useState<AfterimageSettings>(()=>loadSettings())
- const [started,setStarted]=useState(false),[status,setStatus]=useState(''),[busy,setBusy]=useState(false)
- const reduced=useReducedMotion(),onInteraction=useCallback(()=>setStarted(true),[])
- const {canvasRef,clearCanvas,exportCanvas,engineError}=useAfterimageEngine(settings,reduced,onInteraction)
- useEffect(()=>saveSettings(settings),[settings])
- const patch=(value:Partial<AfterimageSettings>)=>setSettings(s=>({...s,...value}))
- const clear=()=>{clearCanvas();setStarted(false);setStatus('A clean page. Begin again.')}
- const save=async()=>{if(busy)return;setBusy(true);try{downloadBlob(await exportCanvas(),createExportFilename());setStatus('Your image is ready. Keep this moment.')}catch(e){setStatus(e instanceof Error?e.message:'Could not export image.')}finally{setBusy(false)}}
- return <div className="shell">
-  <header className="topbar"><a className="brand" href="#top"><span className="brand-icon">✳</span>afterimage<span className="brand-period">.</span></a><div className="top-center">A STUDY IN MOTION <i/> An interactive generative drawing instrument</div><span className="edition">STUDIO 01 · BETA</span></header>
-  <main id="top"><div className="intro"><div><p className="eyebrow">A LITTLE TRACE OF THE MOMENT</p><h1>Make a moment <em>linger.</em></h1></div><p className="intro-note">Nothing here needs to last.<br/>Except what you choose to keep.</p></div>
-   <div className="workspace"><section className="canvas-column"><div className="canvas-meta"><span><b>01</b> THE CANVAS</span><span className="live"><i/> LIVE SURFACE</span></div><div className="canvas-frame"><canvas ref={canvasRef} aria-label="Interactive drawing canvas. Move your pointer or drag to create fading particle trails." aria-describedby="canvas-help"/>{!started&&!engineError&&<div className="canvas-prompt"><span>✳</span><strong>Move through the canvas.</strong><small>Your movement leaves a trace.</small></div>}{engineError&&<div className="canvas-error" role="alert">{engineError}</div>}<span className="corner top">A / 01</span><span className="corner bottom">FIELD NOTES · 001</span></div><p id="canvas-help" className="canvas-help"><b>MOVE</b> to draw <i/> <b>PRESS + DRAG</b> to stay with the line</p></section>
-   <aside className="controls"><div className="control-title"><div><p className="eyebrow">THE INSTRUMENT</p><h2>Shape the trace</h2></div><span>02 / 02</span></div>
-    <section className="control-section"><div className="section-title"><h3>Colour field</h3><small>01</small></div><div className="palettes">{PALETTES.map(p=><button key={p.id} type="button" className={settings.palette===p.id?'palette selected':'palette'} aria-pressed={settings.palette===p.id} onClick={()=>patch({palette:p.id as PaletteId})}><span className="swatches">{p.swatch.map(c=><i key={c} style={{background:c}}/>)}</span>{p.name}<span className="check">{settings.palette===p.id?'●':''}</span></button>)}</div></section>
-    <section className="control-section"><div className="section-title"><h3>Particle size</h3><small>02</small></div><div className="range-label"><label htmlFor="size">Scale</label><output>{settings.particleSize.toFixed(1)} px</output></div><input id="size" type="range" min="1.4" max="7" step=".2" value={settings.particleSize} onChange={e=>patch({particleSize:Number(e.target.value)})}/><p className="hint">A finer point or a wider bloom.</p></section>
-    <section className="control-section"><div className="section-title"><h3>Afterglow</h3><small>03</small></div><div className="range-label"><label htmlFor="trail">Persistence</label><output>{Math.round(settings.trailPersistence*100)}%</output></div><input id="trail" type="range" min=".62" max=".96" step=".01" value={settings.trailPersistence} onChange={e=>patch({trailPersistence:Number(e.target.value)})}/><p className="hint">How long the last movement stays with you.</p></section>
-    <div className="actions"><button className="button quiet" onClick={clear}>↺ &nbsp; Clear canvas</button><button className="button primary" onClick={save} disabled={busy}>↓ &nbsp; {busy?'Preparing…':'Save image'}</button></div><p className="privacy">✳ Your work stays in this browser. Nothing is uploaded.</p>
-   </aside></div><div className="below"><span>✳ &nbsp; Every gesture is a small beginning.</span><div role="status" aria-live="polite">{status}</div><button onClick={()=>setSettings({...DEFAULT_SETTINGS})}>Reset settings</button></div>
-  </main><footer><span>MADE TO DISAPPEAR. MADE TO BE KEPT.</span><span>YOUR CANVAS, YOUR MOMENT　·　NO UPLOADS</span></footer>
- </div>
+import { useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
+import { useAfterimageEngine } from '../hooks/useAfterimageEngine'
+import { useReducedMotion } from '../hooks/useReducedMotion'
+import { loadSettings, saveSettings } from '../settings/storage'
+import { PALETTES } from '../engine/palettes'
+import { createExportFilename, downloadBlob } from '../utils/download'
+import type { AfterimageSettings } from '../types'
+
+function ClearIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M4.8 6.5h10.4M8 6.5V4.2h4v2.3m1.2 0-.6 9.2H7.4l-.6-9.2M8.8 9v4.4m2.4-4.4v4.4" />
+    </svg>
+  )
+}
+
+function SaveIcon() {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M10 2.8v9.1m-3.4-3.3 3.4 3.4 3.4-3.4M3.5 13.3v3.2h13v-3.2" />
+    </svg>
+  )
+}
+
+export default function App() {
+  const [settings, setSettings] = useState<AfterimageSettings>(() => loadSettings())
+  const [status, setStatus] = useState('')
+  const [busy, setBusy] = useState(false)
+  const reducedMotion = useReducedMotion()
+  const { canvasRef, clearCanvas, exportCanvas, engineError } = useAfterimageEngine(settings, reducedMotion)
+
+  useEffect(() => saveSettings(settings), [settings])
+
+  const updateSettings = (patch: Partial<AfterimageSettings>) => {
+    setSettings(current => ({ ...current, ...patch }))
+  }
+
+  const handleClear = () => {
+    clearCanvas()
+    setStatus('Canvas cleared')
+  }
+
+  const handleSave = async () => {
+    if (busy) return
+    setBusy(true)
+    setStatus('')
+    try {
+      const blob = await exportCanvas()
+      downloadBlob(blob, createExportFilename())
+      setStatus('PNG exported')
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : 'Could not export the canvas.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <main className="studio">
+      <section className="canvas-stage" aria-label="Afterimage drawing area">
+        <canvas
+          ref={canvasRef}
+          className="drawing-canvas"
+          aria-label="Interactive drawing canvas. Move your pointer or drag to create fading particle trails."
+          aria-describedby="canvas-instructions"
+        />
+        {engineError && <div className="canvas-error" role="alert">{engineError}</div>}
+        <p className="sr-only" id="canvas-instructions">
+          Move or drag your pointer across the canvas to create a fading particle drawing.
+          Use the controls to choose a colour palette and adjust particle size and afterglow.
+        </p>
+      </section>
+
+      <div className="canvas-actions" role="group" aria-label="Canvas actions">
+        <button
+          className="action-button"
+          type="button"
+          onClick={handleClear}
+          aria-label="Clear canvas"
+          title="Clear canvas"
+        >
+          <ClearIcon />
+        </button>
+        <button
+          className="action-button save-button"
+          type="button"
+          onClick={handleSave}
+          disabled={busy}
+          aria-label={busy ? 'Saving image' : 'Save canvas as PNG'}
+          title={busy ? 'Saving image' : 'Save PNG'}
+        >
+          <SaveIcon />
+        </button>
+      </div>
+
+      <section className="control-dock" aria-label="Drawing controls">
+        <div className="dock-content">
+          <div className="palette-control">
+            <div className="palette-options" role="group" aria-label="Colour palette">
+              {PALETTES.map(palette => (
+                <button
+                  key={palette.id}
+                  type="button"
+                  className={settings.palette === palette.id ? 'palette-swatch is-selected' : 'palette-swatch'}
+                  style={{ '--swatch': 'linear-gradient(115deg, ' + palette.swatch.join(', ') + ')' } as CSSProperties}
+                  aria-label={palette.name}
+                  aria-pressed={settings.palette === palette.id}
+                  title={palette.name}
+                  onClick={() => updateSettings({ palette: palette.id })}
+                >
+                  <span />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="dock-divider" aria-hidden="true" />
+
+          <div className="slider-control">
+            <div className="slider-heading">
+              <label htmlFor="particle-size">SIZE</label>
+              <output htmlFor="particle-size">{settings.particleSize.toFixed(1)}<small> px</small></output>
+            </div>
+            <input
+              id="particle-size"
+              type="range"
+              min="1.4"
+              max="7"
+              step="0.2"
+              value={settings.particleSize}
+              onChange={event => updateSettings({ particleSize: Number(event.target.value) })}
+            />
+          </div>
+
+          <div className="slider-control">
+            <div className="slider-heading">
+              <label htmlFor="trail-persistence">AFTERGLOW</label>
+              <output htmlFor="trail-persistence">{Math.round(settings.trailPersistence * 100)}<small>%</small></output>
+            </div>
+            <input
+              id="trail-persistence"
+              type="range"
+              min="0.62"
+              max="0.96"
+              step="0.01"
+              value={settings.trailPersistence}
+              onChange={event => updateSettings({ trailPersistence: Number(event.target.value) })}
+            />
+          </div>
+        </div>
+      </section>
+
+      {status && <div className="status-message" role="status" aria-live="polite">{status}</div>}
+    </main>
+  )
 }
