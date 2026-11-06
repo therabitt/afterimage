@@ -1,42 +1,44 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { useAfterimageEngine } from '../hooks/useAfterimageEngine'
 import { useReducedMotion } from '../hooks/useReducedMotion'
 import { loadSettings, saveSettings } from '../settings/storage'
-import { DEFAULT_SETTINGS } from '../settings/defaults'
 import { PALETTES } from '../engine/palettes'
 import { createExportFilename, downloadBlob } from '../utils/download'
 import type { AfterimageSettings } from '../types'
 
 function ClearIcon() {
-  return <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4.2 8a6 6 0 1 1 .1 4.1M4 3.9v4.5h4.5M10 6.2v4l2.5 1.5" /></svg>
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M4.8 6.5h10.4M8 6.5V4.2h4v2.3m1.2 0-.6 9.2H7.4l-.6-9.2M8.8 9v4.4m2.4-4.4v4.4" />
+    </svg>
+  )
 }
 
 function SaveIcon() {
-  return <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 2.8v9.1m-3.4-3.3 3.4 3.4 3.4-3.4M3.5 13.3v3.2h13v-3.2" /></svg>
-}
-
-function Mark() {
-  return <svg viewBox="0 0 28 28" aria-hidden="true"><path d="M14 2.8c1.1 6.1 3.1 8.1 9.2 9.2-6.1 1.1-8.1 3.1-9.2 9.2-1.1-6.1-3.1-8.1-9.2-9.2 6.1-1.1 8.1-3.1 9.2-9.2Z" /><path d="M22.5 18.5c.5 2.8 1.4 3.7 4.2 4.2-2.8.5-3.7 1.4-4.2 4.2-.5-2.8-1.4-3.7-4.2-4.2 2.8-.5 3.7-1.4 4.2-4.2Z" /></svg>
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden="true">
+      <path d="M10 2.8v9.1m-3.4-3.3 3.4 3.4 3.4-3.4M3.5 13.3v3.2h13v-3.2" />
+    </svg>
+  )
 }
 
 export default function App() {
   const [settings, setSettings] = useState<AfterimageSettings>(() => loadSettings())
-  const [started, setStarted] = useState(false)
   const [status, setStatus] = useState('')
   const [busy, setBusy] = useState(false)
   const reducedMotion = useReducedMotion()
-  const onInteraction = useCallback(() => setStarted(true), [])
-  const { canvasRef, clearCanvas, exportCanvas, engineError } = useAfterimageEngine(settings, reducedMotion, onInteraction)
+  const { canvasRef, clearCanvas, exportCanvas, engineError } = useAfterimageEngine(settings, reducedMotion)
 
   useEffect(() => saveSettings(settings), [settings])
 
-  const updateSettings = (patch: Partial<AfterimageSettings>) => setSettings(current => ({ ...current, ...patch }))
+  const updateSettings = (patch: Partial<AfterimageSettings>) => {
+    setSettings(current => ({ ...current, ...patch }))
+  }
 
   const handleClear = () => {
     clearCanvas()
-    setStarted(false)
-    setStatus('Canvas cleared. A new moment is yours.')
+    setStatus('Canvas cleared')
   }
 
   const handleSave = async () => {
@@ -46,7 +48,7 @@ export default function App() {
     try {
       const blob = await exportCanvas()
       downloadBlob(blob, createExportFilename())
-      setStatus('Image saved as PNG.')
+      setStatus('PNG exported')
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Could not export the canvas.')
     } finally {
@@ -55,7 +57,7 @@ export default function App() {
   }
 
   return (
-    <main className="studio" id="top">
+    <main className="studio">
       <section className="canvas-stage" aria-label="Afterimage drawing area">
         <canvas
           ref={canvasRef}
@@ -63,57 +65,45 @@ export default function App() {
           aria-label="Interactive drawing canvas. Move your pointer or drag to create fading particle trails."
           aria-describedby="canvas-instructions"
         />
-        {!started && !engineError && (
-          <div className="canvas-invitation" aria-hidden="true">
-            <span className="invitation-mark"><Mark /></span>
-            <p className="invitation-title">Leave a little trace.</p>
-            <p className="invitation-caption">Move anywhere to begin</p>
-          </div>
-        )}
         {engineError && <div className="canvas-error" role="alert">{engineError}</div>}
         <p className="sr-only" id="canvas-instructions">
-          Move your mouse across the canvas, or touch and drag, to create a fading particle drawing.
-          Use the floating controls to choose a colour palette and adjust particle size and trail persistence.
+          Move or drag your pointer across the canvas to create a fading particle drawing.
+          Use the controls to choose a colour palette and adjust particle size and afterglow.
         </p>
-        <div className="canvas-vignette" aria-hidden="true" />
       </section>
 
-      <header className="studio-header">
-        <a className="studio-brand" href="#top" aria-label="Afterimage home">
-          <span className="brand-mark"><Mark /></span>
-          <span className="brand-word">afterimage<span>.</span></span>
-        </a>
-        <p className="header-note">A STUDY IN MOTION <i /> AN INTERACTIVE DRAWING INSTRUMENT</p>
-        <div className="header-actions">
-          <button className="action-button clear-button" type="button" onClick={handleClear} title="Clear canvas">
-            <ClearIcon /><span>Clear</span>
-          </button>
-          <button className="action-button save-button" type="button" onClick={handleSave} disabled={busy} title="Save canvas as PNG">
-            <SaveIcon /><span>{busy ? 'Saving' : 'Save image'}</span>
-          </button>
-        </div>
-      </header>
-
-      <div className="stage-caption" aria-hidden="true">
-        <span className="stage-index">01 <i /> THE LIVING CANVAS</span>
-        <span className="stage-coordinate">A DIGITAL STUDY OF MOVEMENT & MEMORY</span>
+      <div className="canvas-actions" role="group" aria-label="Canvas actions">
+        <button
+          className="action-button"
+          type="button"
+          onClick={handleClear}
+          aria-label="Clear canvas"
+          title="Clear canvas"
+        >
+          <ClearIcon />
+        </button>
+        <button
+          className="action-button save-button"
+          type="button"
+          onClick={handleSave}
+          disabled={busy}
+          aria-label={busy ? 'Saving image' : 'Save canvas as PNG'}
+          title={busy ? 'Saving image' : 'Save PNG'}
+        >
+          <SaveIcon />
+        </button>
       </div>
 
       <section className="control-dock" aria-label="Drawing controls">
-        <div className="dock-heading">
-          <span>SHAPE YOUR TRACE</span>
-          <button type="button" className="reset-button" onClick={() => updateSettings({ ...DEFAULT_SETTINGS })}>Reset</button>
-        </div>
         <div className="dock-content">
           <div className="palette-control">
-            <span className="control-label">COLOUR FIELD</span>
             <div className="palette-options" role="group" aria-label="Colour palette">
               {PALETTES.map(palette => (
                 <button
                   key={palette.id}
                   type="button"
                   className={settings.palette === palette.id ? 'palette-swatch is-selected' : 'palette-swatch'}
-                  style={{ '--swatch': `linear-gradient(115deg, ${palette.swatch.join(', ')})` } as CSSProperties}
+                  style={{ '--swatch': 'linear-gradient(115deg, ' + palette.swatch.join(', ') + ')' } as CSSProperties}
                   aria-label={palette.name}
                   aria-pressed={settings.palette === palette.id}
                   title={palette.name}
@@ -123,14 +113,13 @@ export default function App() {
                 </button>
               ))}
             </div>
-            <span className="selected-palette">{PALETTES.find(palette => palette.id === settings.palette)?.name}</span>
           </div>
 
-          <div className="dock-divider" />
+          <div className="dock-divider" aria-hidden="true" />
 
           <div className="slider-control">
             <div className="slider-heading">
-              <label htmlFor="particle-size">PARTICLE SIZE</label>
+              <label htmlFor="particle-size">SIZE</label>
               <output htmlFor="particle-size">{settings.particleSize.toFixed(1)}<small> px</small></output>
             </div>
             <input
@@ -162,12 +151,7 @@ export default function App() {
         </div>
       </section>
 
-      <footer className="studio-footer">
-        <span className="gesture-hint"><kbd>MOVE</kbd> TO DRAW <i /> <kbd>PRESS + DRAG</kbd> TO STAY</span>
-        <span className="privacy-note">YOUR WORK STAYS HERE <i /> NO UPLOADS</span>
-      </footer>
-
-      <div className="status-message" role="status" aria-live="polite">{status}</div>
+      {status && <div className="status-message" role="status" aria-live="polite">{status}</div>}
     </main>
   )
 }
